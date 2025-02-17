@@ -17,7 +17,7 @@ export const TimerControls: React.FC<TimerControlsProps> = ({
   onRestart,
 }) => {
   const isCompleted = remainingTime <= 0;
-  
+
   if (isCompleted) {
     return (
       <button
@@ -33,11 +33,10 @@ export const TimerControls: React.FC<TimerControlsProps> = ({
   return (
     <button
       onClick={onToggle}
-      className={`p-3 rounded-full transition-colors ${
-        isRunning
+      className={`p-3 rounded-full transition-colors ${isRunning
           ? 'bg-red-100 text-red-600 hover:bg-red-200'
           : 'bg-green-100 text-green-600 hover:bg-green-200'
-      }`}
+        }`}
       title={isRunning ? 'Pause Timer' : 'Start Timer'}
     >
       {isRunning ? (

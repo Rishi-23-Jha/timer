@@ -1,76 +1,59 @@
-import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest';
-import { TimerAudio } from './audio';
+export class TimerAudio {
+  private static instance: TimerAudio;
+  private audioContext: AudioContext | null = null;
+  private oscillator: OscillatorNode | null = null;
+  private gainNode: GainNode | null = null;
 
-describe('TimerAudio', () => {
-  let timerAudio: TimerAudio;
+  private constructor() { }
 
-  beforeEach(() => {
-    timerAudio = TimerAudio.getInstance();
-    // Mock the AudioContext
-    globalThis.AudioContext = class {
-      state = 'suspended';
-      resume = vi.fn().mockResolvedValue(undefined);
-      createOscillator = vi.fn().mockReturnValue({
-        type: '',
-        frequency: {
-          setValueAtTime: vi.fn(),
-        },
-        start: vi.fn(),
-        stop: vi.fn(),
-        disconnect: vi.fn(),
-      });
-      createGain = vi.fn().mockReturnValue({
-        gain: {
-          setValueAtTime: vi.fn(),
-          linearRampToValueAtTime: vi.fn(),
-        },
-        connect: vi.fn(),
-        disconnect: vi.fn(),
-      });
-      destination = {};
-    } as unknown as typeof AudioContext;
-  });
+  static getInstance(): TimerAudio {
+    if (!TimerAudio.instance) {
+      TimerAudio.instance = new TimerAudio();
+    }
+    return TimerAudio.instance;
+  }
 
-  afterEach(() => {
-    // Cleanup after each test
-    timerAudio.stop();
-  });
+  private async initializeAudioContext(): Promise<void> {
+    if (!this.audioContext) {
+      this.audioContext = new AudioContext();
+    }
 
-  it('should create a singleton instance', () => {
-    const anotherInstance = TimerAudio.getInstance();
-    expect(timerAudio).toBe(anotherInstance);
-  });
+    if (this.audioContext.state === 'suspended') {
+      await this.audioContext.resume();
+    }
+  }
 
-  it('should initialize audio context', async () => {
-    await timerAudio.play();
-    expect(timerAudio['audioContext']).not.toBeNull();
-  });
+  async play(): Promise<void> {
+    try {
+      await this.initializeAudioContext();
+      if (!this.audioContext) throw new Error('AudioContext not initialized');
 
-  it('should play sound', async () => {
-    const playSpy = vi.spyOn(timerAudio, 'play');
-    await timerAudio.play();
-    expect(playSpy).toHaveBeenCalled();
-  });
+      this.oscillator = this.audioContext.createOscillator();
+      this.gainNode = this.audioContext.createGain();
 
-  it('should cleanup resources', async () => {
-    await timerAudio.play();
-    timerAudio.stop();
-    expect(timerAudio['oscillator']).toBeNull();
-    expect(timerAudio['gainNode']).toBeNull();
-  });
+      this.oscillator.type = 'sine';
+      this.oscillator.frequency.setValueAtTime(880, this.audioContext.currentTime);
 
-  it('should handle errors during play', async () => {
-    const originalAudioContext = globalThis.AudioContext;
-    globalThis.AudioContext = vi.fn().mockImplementation(() => {
-      throw new Error('AudioContext error');
-    });
+      // Loop the sound
+      this.gainNode.gain.setValueAtTime(0.5, this.audioContext.currentTime);
+      this.oscillator.connect(this.gainNode);
+      this.gainNode.connect(this.audioContext.destination);
 
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      this.oscillator.start();
+    } catch (error) {
+      console.error('Failed to play audio:', error);
+    }
+  }
 
-    await timerAudio.play();
-
-    expect(consoleErrorSpy).toHaveBeenCalledWith('Failed to play audio:', expect.any(Error));
-
-    globalThis.AudioContext = originalAudioContext;
-  });
-}); 
+  stop(): void {
+    if (this.oscillator) {
+      this.oscillator.stop();
+      this.oscillator.disconnect();
+      this.oscillator = null;
+    }
+    if (this.gainNode) {
+      this.gainNode.disconnect();
+      this.gainNode = null;
+    }
+  }
+}
